@@ -1,0 +1,32 @@
+# Example Terraform Variables File
+# Copy this file to terraform.tfvars and customize the values
+
+# AWS Configuration
+aws_region = "us-west-2"
+
+# Project Configuration
+project_name = "enterprise-web-crawler"
+environment  = "dev"
+
+# Network Configuration
+vpc_cidr             = "10.0.0.0/16"
+private_subnet_cidrs = ["10.0.1.0/24", "10.0.2.0/24", "10.0.3.0/24"]
+public_subnet_cidrs  = ["10.0.101.0/24", "10.0.102.0/24", "10.0.103.0/24"]
+
+# Database Configuration
+db_instance_class = "db.t3.medium"
+
+# Cache Configuration
+redis_node_type = "cache.t3.micro"
+
+# ECS Configuration
+ecs_task_cpu    = 512
+ecs_task_memory = 1024
+
+# Auto Scaling Configuration
+min_capacity = 2
+max_capacity = 10
+
+# SSL/Domain Configuration (Optional)
+# domain_name     = "crawler.example.com"
+# certificate_arn = "arn:aws:acm:us-west-2:123456789012:certificate/12345678-1234-1234-1234-123456789012"

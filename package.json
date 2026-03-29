@@ -1,0 +1,43 @@
+{
+  "name": "enterprise-web-crawler",
+  "version": "1.0.0",
+  "description": "Enterprise-grade web crawler for marketing site analysis",
+  "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces",
+    "dev": "npm run dev --workspaces",
+    "test": "npm run test --workspaces",
+    "lint": "eslint packages/*/src --ext .ts,.tsx",
+    "lint:fix": "eslint packages/*/src --ext .ts,.tsx --fix",
+    "format": "prettier --write packages/*/src/**/*.{ts,tsx,json,md}",
+    "format:check": "prettier --check packages/*/src/**/*.{ts,tsx,json,md}",
+    "docker:build": "docker-compose build",
+    "docker:up": "docker-compose up -d",
+    "docker:down": "docker-compose down",
+    "docker:logs": "docker-compose logs -f",
+    "docker:dev": "cp .env.development .env 2>/dev/null || cp .env.example .env && docker-compose up -d --build",
+    "docker:prod": "cp .env.production .env && docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build",
+    "docker:test": "cp .env.test .env && docker-compose -f docker-compose.yml -f docker-compose.test.yml up -d",
+    "docker:clean": "docker-compose down -v --remove-orphans && docker system prune -f",
+    "docker:health": "curl -f http://localhost:8000/health && curl -f http://localhost:3000/ > /dev/null 2>&1",
+    "deploy:dev": "node -e \"process.platform === 'win32' ? require('child_process').spawn('powershell', ['-ExecutionPolicy', 'Bypass', '-File', 'scripts/deploy.ps1', '-Environment', 'development'], {stdio: 'inherit'}) : require('child_process').spawn('bash', ['scripts/deploy.sh', '-e', 'development'], {stdio: 'inherit'})\"",
+    "deploy:prod": "node -e \"process.platform === 'win32' ? require('child_process').spawn('powershell', ['-ExecutionPolicy', 'Bypass', '-File', 'scripts/deploy.ps1', '-Environment', 'production'], {stdio: 'inherit'}) : require('child_process').spawn('bash', ['scripts/deploy.sh', '-e', 'production'], {stdio: 'inherit'})\"",
+    "test:deployment": "bash scripts/test-deployment.sh"
+  },
+  "devDependencies": {
+    "@typescript-eslint/eslint-plugin": "^6.0.0",
+    "@typescript-eslint/parser": "^6.0.0",
+    "eslint": "^8.45.0",
+    "eslint-config-prettier": "^8.8.0",
+    "eslint-plugin-prettier": "^5.0.0",
+    "prettier": "^3.0.0",
+    "typescript": "^5.1.0"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  }
+}

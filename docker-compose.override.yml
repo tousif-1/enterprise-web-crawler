@@ -1,0 +1,101 @@
+# Docker Compose Override File
+# This file is automatically loaded by docker-compose and allows
+# developers to customize the configuration for their local environment
+# without modifying the main docker-compose.yml file
+
+version: '3.8'
+
+services:
+  # Backend service overrides
+  backend:
+    # Uncomment to enable debugging
+    # ports:
+    #   - "9229:9229"  # Node.js debug port
+    # command: ["npm", "run", "dev:debug"]
+    
+    # Uncomment to customize environment variables
+    # environment:
+    #   - DEBUG=*
+    #   - LOG_LEVEL=debug
+    
+    # Uncomment to add additional volumes
+    # volumes:
+    #   - ./custom-config:/app/config
+
+  # Crawler service overrides
+  crawler:
+    # Uncomment to limit crawler resources for development
+    # deploy:
+    #   resources:
+    #     limits:
+    #       memory: 512M
+    #       cpus: '0.5'
+    
+    # Uncomment to enable crawler debugging
+    # environment:
+    #   - PUPPETEER_HEADLESS=false
+    #   - DEBUG=puppeteer:*
+
+  # Frontend service overrides
+  frontend:
+    # Uncomment to customize frontend environment
+    # environment:
+    #   - VITE_DEBUG=true
+    #   - VITE_LOG_LEVEL=debug
+
+  # Database service overrides
+  postgres:
+    # Uncomment to enable query logging
+    # command: postgres -c log_statement=all -c log_min_duration_statement=0
+    
+    # Uncomment to add custom initialization scripts
+    # volumes:
+    #   - ./custom-init.sql:/docker-entrypoint-initdb.d/99-custom.sql
+
+  # Redis service overrides
+  redis:
+    # Uncomment to enable Redis persistence
+    # command: redis-server --appendonly yes
+    
+    # Uncomment to add Redis configuration
+    # volumes:
+    #   - ./redis.conf:/usr/local/etc/redis/redis.conf
+    # command: redis-server /usr/local/etc/redis/redis.conf
+
+  # Elasticsearch service overrides
+  elasticsearch:
+    # Uncomment to adjust memory settings for development
+    # environment:
+    #   - "ES_JAVA_OPTS=-Xms256m -Xmx256m"
+    
+    # Uncomment to enable debug logging
+    # environment:
+    #   - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+    #   - logger.level=DEBUG
+
+# Uncomment to add additional services for development
+# services:
+#   # Example: Add a database admin tool
+#   pgadmin:
+#     image: dpage/pgadmin4:latest
+#     environment:
+#       PGADMIN_DEFAULT_EMAIL: admin@example.com
+#       PGADMIN_DEFAULT_PASSWORD: admin
+#     ports:
+#       - "5050:80"
+#     depends_on:
+#       - postgres
+#     networks:
+#       - webcrawler-network
+#
+#   # Example: Add Redis admin tool
+#   redis-commander:
+#     image: rediscommander/redis-commander:latest
+#     environment:
+#       REDIS_HOSTS: local:redis:6379
+#     ports:
+#       - "8081:8081"
+#     depends_on:
+#       - redis
+#     networks:
+#       - webcrawler-network

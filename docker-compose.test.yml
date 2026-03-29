@@ -1,0 +1,100 @@
+version: '3.8'
+
+services:
+  backend:
+    environment:
+      - NODE_ENV=test
+      - DATABASE_URL=postgresql://webcrawler:webcrawler_password@postgres-test:5432/webcrawler_test
+      - REDIS_URL=redis://redis-test:6379
+      - ELASTICSEARCH_URL=http://elasticsearch-test:9200
+    command: ["npm", "run", "test", "--", "--run"]
+    depends_on:
+      postgres-test:
+        condition: service_healthy
+      redis-test:
+        condition: service_healthy
+      elasticsearch-test:
+        condition: service_healthy
+
+  crawler:
+    environment:
+      - NODE_ENV=test
+      - DATABASE_URL=postgresql://webcrawler:webcrawler_password@postgres-test:5432/webcrawler_test
+      - REDIS_URL=redis://redis-test:6379
+    command: ["npm", "run", "test", "--", "--run"]
+    depends_on:
+      postgres-test:
+        condition: service_healthy
+      redis-test:
+        condition: service_healthy
+
+  frontend:
+    environment:
+      - NODE_ENV=test
+      - VITE_API_URL=http://backend:8000
+      - VITE_WS_URL=ws://backend:8000
+    command: ["npm", "run", "test", "--", "--run"]
+
+  postgres-test:
+    image: postgres:15-alpine
+    container_name: webcrawler-postgres-test
+    environment:
+      POSTGRES_DB: webcrawler_test
+      POSTGRES_USER: webcrawler
+      POSTGRES_PASSWORD: webcrawler_password
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_test_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U webcrawler -d webcrawler_test"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - webcrawler-network
+
+  redis-test:
+    image: redis:7-alpine
+    container_name: webcrawler-redis-test
+    ports:
+      - "6380:6379"
+    volumes:
+      - redis_test_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    networks:
+      - webcrawler-network
+
+  elasticsearch-test:
+    image: elasticsearch:8.8.0
+    container_name: webcrawler-elasticsearch-test
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - "ES_JAVA_OPTS=-Xms256m -Xmx256m"
+    ports:
+      - "9201:9200"
+    volumes:
+      - elasticsearch_test_data:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks:
+      - webcrawler-network
+
+volumes:
+  postgres_test_data:
+    driver: local
+  redis_test_data:
+    driver: local
+  elasticsearch_test_data:
+    driver: local

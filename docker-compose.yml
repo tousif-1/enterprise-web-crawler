@@ -1,0 +1,241 @@
+version: '3.8'
+
+services:
+  # Database Services
+  postgres:
+    image: postgres:15-alpine
+    container_name: webcrawler-postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-webcrawler}
+      POSTGRES_USER: ${POSTGRES_USER:-webcrawler}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-webcrawler_password}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-webcrawler} -d ${POSTGRES_DB:-webcrawler}"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
+        reservations:
+          memory: 256M
+          cpus: '0.25'
+    restart: unless-stopped
+    networks:
+      - webcrawler-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: webcrawler-redis
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.25'
+        reservations:
+          memory: 128M
+          cpus: '0.1'
+    restart: unless-stopped
+    networks:
+      - webcrawler-network
+
+  elasticsearch:
+    image: elasticsearch:8.8.0
+    container_name: webcrawler-elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+      - bootstrap.memory_lock=true
+    ports:
+      - "${ELASTICSEARCH_PORT:-9200}:9200"
+      - "9300:9300"
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '1.0'
+        reservations:
+          memory: 512M
+          cpus: '0.5'
+    restart: unless-stopped
+    networks:
+      - webcrawler-network
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+
+  # Application Services
+  backend:
+    build:
+      context: .
+      dockerfile: packages/backend/Dockerfile
+      target: ${BUILD_TARGET:-dev}
+    container_name: webcrawler-backend
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    environment:
+      - NODE_ENV=${NODE_ENV:-development}
+      - PORT=8000
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-webcrawler}:${POSTGRES_PASSWORD:-webcrawler_password}@postgres:5432/${POSTGRES_DB:-webcrawler}
+      - REDIS_URL=redis://redis:6379
+      - ELASTICSEARCH_URL=http://elasticsearch:9200
+      - JWT_SECRET=${JWT_SECRET:-dev-jwt-secret}
+      - MAX_CONCURRENT_CRAWLS=${MAX_CONCURRENT_CRAWLS:-10}
+      - DEFAULT_CRAWL_TIMEOUT=${DEFAULT_CRAWL_TIMEOUT:-30000}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+    volumes:
+      - ./packages/backend:/app/packages/backend:${VOLUME_MODE:-rw}
+      - ./packages/shared:/app/packages/shared:ro
+      - backend_node_modules:/app/packages/backend/node_modules
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
+        reservations:
+          memory: 256M
+          cpus: '0.25'
+    restart: unless-stopped
+    networks:
+      - webcrawler-network
+    command: ${BACKEND_COMMAND:-npm run dev}
+
+  crawler:
+    build:
+      context: .
+      dockerfile: packages/crawler/Dockerfile
+      target: ${BUILD_TARGET:-dev}
+    container_name: webcrawler-crawler
+    environment:
+      - NODE_ENV=${NODE_ENV:-development}
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-webcrawler}:${POSTGRES_PASSWORD:-webcrawler_password}@postgres:5432/${POSTGRES_DB:-webcrawler}
+      - REDIS_URL=redis://redis:6379
+      - MAX_CONCURRENT_CRAWLS=${MAX_CONCURRENT_CRAWLS:-10}
+      - DEFAULT_CRAWL_TIMEOUT=${DEFAULT_CRAWL_TIMEOUT:-30000}
+      - PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./packages/crawler:/app/packages/crawler:${VOLUME_MODE:-rw}
+      - ./packages/shared:/app/packages/shared:ro
+      - crawler_node_modules:/app/packages/crawler/node_modules
+    healthcheck:
+      test: ["CMD", "pgrep", "-f", "node"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '1.0'
+        reservations:
+          memory: 512M
+          cpus: '0.5'
+    restart: unless-stopped
+    networks:
+      - webcrawler-network
+    command: ${CRAWLER_COMMAND:-npm run dev}
+
+  frontend:
+    build:
+      context: .
+      dockerfile: packages/frontend/Dockerfile
+      target: ${BUILD_TARGET:-dev}
+    container_name: webcrawler-frontend
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    environment:
+      - NODE_ENV=${NODE_ENV:-development}
+      - VITE_API_URL=${VITE_API_URL:-http://localhost:8000}
+      - VITE_WS_URL=${VITE_WS_URL:-ws://localhost:8000}
+    depends_on:
+      backend:
+        condition: service_healthy
+    volumes:
+      - ./packages/frontend:/app/packages/frontend:${VOLUME_MODE:-rw}
+      - ./packages/shared:/app/packages/shared:ro
+      - frontend_node_modules:/app/packages/frontend/node_modules
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.25'
+        reservations:
+          memory: 128M
+          cpus: '0.1'
+    restart: unless-stopped
+    networks:
+      - webcrawler-network
+    command: ${FRONTEND_COMMAND:-npm run dev}
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  elasticsearch_data:
+    driver: local
+  backend_node_modules:
+    driver: local
+  crawler_node_modules:
+    driver: local
+  frontend_node_modules:
+    driver: local
+
+networks:
+  webcrawler-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
